@@ -1,10 +1,10 @@
 import dataHelper
-import api
+import dataRetrieval
 
 #37055818 = main chat
 #60699437 = monke chat
 
-print(api.getGroups())
+print(dataRetrieval.getAPIGroups())
 
 #these might take several minutes each depending on the # of messages in the group
 '''

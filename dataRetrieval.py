@@ -1,4 +1,21 @@
 import requests
+import dataHelper
+import json
+
+'''
+This module is responsible for gathering data from either the API or from
+local files.
+'''
+
+'''
+Current plan is to have these functions support both getting data from the api
+and local data from a download
+
+Need to implement supporting local json reading (streaming using ijson library)
+
+Might want to use the class for chatMessages here to support storing message
+data more easily
+'''
 
 baseEndpoint = "https://api.groupme.com/v3"
 
@@ -14,7 +31,7 @@ with open('Files\\Access Token.txt') as f:
 Returns a json response from the given endpoint
 Returns False on error
 '''
-def doRequest(endpoint):
+def doAPIRequest(endpoint):
     try:
         #call the API
         response = requests.get(url=endpoint)
@@ -29,10 +46,10 @@ def doRequest(endpoint):
 '''
 Returns a list of tuples of all members in the group (userId, username)
 '''
-def getGroupMembers(groupId):
+def getAPIGroupMembers(groupId):
     endpoint = baseEndpoint + "/groups/" + groupId + "?token=" + accessToken
 
-    response = doRequest(endpoint)
+    response = doAPIRequest(endpoint)
     
     members = []
     for member in response["members"]:
@@ -44,7 +61,7 @@ def getGroupMembers(groupId):
 Gets all of the user's active groups
 Returns a list of json responses for all active groups
 '''
-def getGroups():
+def getAPIGroups():
 
     #responses are pagenated, potentially need multiple requests to get all groups
 
@@ -55,7 +72,7 @@ def getGroups():
 
         endpoint = baseEndpoint + "/groups?&per_page=30&omit=memberships&page=" + str(pageNum) + "&token=" + accessToken
 
-        response = doRequest(endpoint)
+        response = doAPIRequest(endpoint)
 
         #if the response is empty, we have gotten every group or an error
         if(not response):
@@ -71,7 +88,7 @@ groupId - (string) ID of the group to get messages from
 beforeId - (string) Message ID, get the messages before the given message ID (optional)
 Returns a list of json responses for messages, empty list if no messages are retrieved
 '''
-def getMessageChunk(groupId, beforeId=None):
+def getAPIMessageChunk(groupId, beforeId=None):
     limit = 100 #how many messages to get in one request (max 100)
 
     endpoint = baseEndpoint + "/groups/" + groupId + "/messages?limit=100" 
@@ -82,8 +99,34 @@ def getMessageChunk(groupId, beforeId=None):
         
     endpoint += "&token=" + accessToken
 
-    response = doRequest(endpoint)
+    response = doAPIRequest(endpoint)
     if(not response):
         return []
 
     return response["messages"]
+
+'''
+The "chunk" is all the group's message data, could potentially use a lot of memory
+Should eventually find some way to stream the data in for less memory usage if it is
+a problem.
+
+Returns a list of json responses
+'''
+def getLocalMessageChunk(groupId):
+    with open(str(groupId) + "/message.json", encoding = 'UTF-8') as json_file:
+        print("Loading messages")
+        return json.load(json_file)
+
+'''
+Returns a list of tuples of all members in the group (userId, username)
+'''
+def getLocalGroupMembers():
+    return "Implement here"
+
+'''
+Identify which groups are downloaded locally
+'''
+#need to find how to format the return, I don't think a group json response comes with
+#locally downloaded data
+def getLocalGroups():
+    return None

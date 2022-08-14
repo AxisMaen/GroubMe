@@ -1,37 +1,5 @@
-import api
+import dataRetrieval
 import user
-
-'''
-Current plan is to have these functions support both getting data from the api
-and local data from a download
-
-Need to implement supporting local json reading (streaming using ijson library)
-
-Might want to use the class for chatMessages here to support storing message
-data more easily
-'''
-
-'''
-Searches a group for all messages containing the given search phrase (case insensitive)
-Returns a list of json responses for messages that contain the search phrase
-Returned messages are in chronological order from oldest to newest
-'''
-def searchMessages(groupId, searchPhrase):
-    
-    messageChunk = api.getMessageChunk(groupId)
-    
-    foundMessages = []
-    while(messageChunk):
-        for message in messageChunk:
-            
-            messageId = message["id"]
-            if(searchPhrase.lower() in str(message["text"]).lower()):
-                foundMessages.append(message)
-        
-        messageChunk = api.getMessageChunk(groupId, messageId)
-
-    return foundMessages[::-1]
-
 
 '''
 We only want to pass through a group one time, so we should get all stats in one go
@@ -41,23 +9,35 @@ most liked message(s)
 
 could save stats to a file of some sort, user can refresh when desired
 '''
-def getGroupStats(groupId):
-    messageChunk = api.getMessageChunk(groupId)
-
-    members = api.getGroupMembers(groupId) #(userId, username), does not include left members
+def getGroupStats(groupId, local=False):
+    
+    #list of json responses for a message
+    messageChunk = []
 
     #dict where key is userId and the value is the User object
     #will eventually include all members who have chatted (including ones who have left)
-    memberDict = {}
-    for member in members:
-        memberDict[member[0]] = user.User(groupId, member[0], member[1])
+    memberDict = {} 
+
+    ### Initial data retrieval from api/local ###
+    if(local):
+        messageChunk = dataRetrieval.getLocalMessageChunk(groupId)
+        members = dataRetrieval.getLocalGroupMembers(groupId)
+    #return an error if we do not have the given group locally
+    else:
+        messageChunk = dataRetrieval.getAPIMessageChunk(groupId)
+        members = dataRetrieval.getGroupMembers(groupId) #(userId, username), does not include left members
+        for member in members:
+            memberDict[member[0]] = user.User(groupId, member[0], member[1])
+    
 
     #used in finding the most liked message(s)
     maxLikes = 0
     maxMessages = [] #list of messages in json form
 
+    ### Begin iterating through all messages ###
     while(messageChunk):
         for message in messageChunk:
+
             messageId = message["id"]
             userId = message["user_id"]
             username = message["name"]
@@ -65,7 +45,7 @@ def getGroupStats(groupId):
 
             #if message is from someone who is no longer in the group, make sure to add them
             if(userId not in memberDict.keys()):
-                memberDict[userId] = user.User(groupId, userId, "Left User (" + username + ")")
+                memberDict[userId] = user.User(groupId, userId, "Inactive User (" + username + ")")
 
             ### messages per user ###
             memberDict[userId].messageCount += 1
@@ -79,8 +59,13 @@ def getGroupStats(groupId):
             elif(likes > maxLikes):
                 maxMessages = [message]
                 maxLikes = likes
-
-        messageChunk = api.getMessageChunk(groupId, messageId)
+        
+        #getting the next message chunk
+        if(local):
+            #the local chunk contained everything, so we are done
+            messageChunk = []
+        else:
+            messageChunk = dataRetrieval.getAPIMessageChunk(groupId, messageId)
 
     ##### POST PROCESSING (after all messages are read) #####
 
@@ -89,3 +74,31 @@ def getGroupStats(groupId):
         member.likeMessageRatio = round(member.likeCount/member.messageCount, 3)
 
     return memberDict.values()
+
+
+
+### NEEDS REWORKING ###
+def searchMessages(groupId, searchPhrase, local=False):
+    
+    messageChunk = []
+    if(local):
+        messageChunk = dataRetrieval.getLocalMessageChunk(groupId)
+    else:
+        messageChunk = dataRetrieval.getAPIMessageChunk(groupId)
+    
+    foundMessages = []
+    while(messageChunk):
+        for message in messageChunk:
+            
+            messageId = message["id"]
+            if(searchPhrase.lower() in str(message["text"]).lower()):
+                foundMessages.append(message)
+        
+        #getting the next message chunk
+        if(local):
+            #the local chunk contained everything, so we are done
+            messageChunk = []
+        else:
+            messageChunk = dataRetrieval.getAPIMessageChunk(groupId, messageId)
+
+    return foundMessages[::-1]
